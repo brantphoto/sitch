@@ -1,0 +1,37 @@
+{
+    "main": ["12345678"],
+    "data": {
+        "12345678": [
+            {
+                "given": "on the landing page",
+                "url": "localhost:3000/login",
+                "wait": 3000
+            },
+            {
+                "given": "Username is filled in with valid username",
+                "find": {
+                    "name": "username"
+                },
+                "sendKeys": "services"
+            },
+            {
+                "given": "the password is filled in`",
+                "find": {
+                    "name": "password"
+                },
+                "sendKeys": "12345678"
+            },
+            {
+                "when": "submit button is clicked",
+                "find": {
+                    "id": "aa-auth-login-btn"
+                },
+                "event": "click"
+            },
+            {
+                "then": "you should be taken to the dashboard",
+                "urlIs": "http://localhost:3000/dashboard"
+            }
+        ]
+    }
+}
