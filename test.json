@@ -3,9 +3,7 @@
     "data": {
         "12345678": [
             {
-                "given": "on the landing page",
-                "url": "localhost:3000/login",
-                "wait": 3000
+                "setup": "localhost:3000/login"
             },
             {
                 "given": "Username is filled in with valid username",
