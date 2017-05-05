@@ -3,6 +3,15 @@
     "data": {
         "12345678": [
             {
+                "setup": {
+                    "type": "ADD_USER",
+                    "data": {
+                        "username": "brant",
+                        "password": "barger"
+                    }
+                }
+            },
+            {
                 "setup": "localhost:3000/login"
             },
             {

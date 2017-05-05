@@ -7,48 +7,96 @@ var driver = new webdriver.Builder()
     .forBrowser('chrome')
     .build();
 
-exports.run = function(path) {
+exports.run = function(path, databaseConfig) {
     var tree;
     var results;
     try {
         tree = JSON.parse(fs.readFileSync(path))
-        console.log(tree);
     }
     catch(err) {
         console.error(err);
     }
 
-    for (var i = 0; i < tree.main.length; i++) {
-        let formattedTests = formatTests(tree.data[tree.main[i]]);
-        setupTest(formattedTests[0])
-        performGiven(formattedTests[1])
-        performWhen(formattedTests[2])
-        performThen(formattedTests[3])
-    }
+    setupDatabase(databaseConfig, function(dbClient, cleanDatabaseMethod) {
+        let db = dbClient;
+        console.log(db)
+        cleanDatabaseMethod(db, function(){console.log('cb!')});
+        for (let i = 0; i < tree.main.length; i++) {
+            cleanDatabaseMethod(db, doneCleaning);
+            let formattedTests = formatTests(tree.data[tree.main[i]]);
+            setupTest(formattedTests, databaseConfig.actions, dbClient)
+                .then(performGiven)
+                .then(performWhen)
+                .then(performThen)
+            // setupTest(formattedTests[0], databaseConfig.actions, dbClient);
+            // performGiven(formattedTests[1])
+            // performWhen(formattedTests[2])
+            // performThen(formattedTests[3])
+        }
+
+        function doneCleaning() {
+            console.log('did it!!!!')
+        }
+    });
+};
+
+function setupDatabase(databaseConfig, cb) {
+    databaseConfig.start(function(databaseClient) {
+        cb(databaseClient, databaseConfig.clean)
+    });
 }
 
-function setupTest(array) {
-    for (var i = 0; i < array.length; i++) {
-        if (typeof array[i].setup == 'string') {
-            driver.get(array[i].setup);
-            continue;
+function setupTest(testMasterArray, actionsMethod, dbClient) {
+
+    const array = testMasterArray[0];
+    return new Promise((resolve, reject) => {
+        try {
+            for (let i = 0; i < array.length; i++) {
+                if (typeof array[i].setup == 'string') {
+                    driver.get(array[i].setup);
+                    continue;
+                }
+                else if (array[i].setup.type) {
+                    actionsMethod(array[i].setup, dbClient, function() {
+                        console.log('ok!');
+                    });
+                    continue;
+                }
+                throw 'no url to go to';
+            }
+            resolve(testMasterArray)
         }
-        throw 'no url to go to';
-    }
+        catch (err) {
+            reject(err)
+        }
+    });
 }
 
 function performGiven(array) {
-    for (var i = 0; i < array.length; i++) {
-        if (array[i].find) {
-            console.log(colors.green('given ' + array[i].given));
-            let findKey = Object.keys(array[i].find)[0]
-            let element = driver.findElement(By[findKey](array[i].find[findKey]));
-            if (array[i].sendKeys) {
-                element.sendKeys(array[i].sendKeys);
-                continue;
-            }
-        }
-    }
+    return new Promise((mainResolve, mainReject) => {
+        const domElements = Promise.all(array[1].map((given) => {
+            return new Promise((resolve, reject) => {
+                let findKey = Object.keys(given.find)[0];
+                driver.findElement(By[findKey](given.find[findKey]))
+                    .then(element => resolve(element))
+                    .catch(err => reject(err));
+            });
+        }));
+
+        domElements
+            .then(elementArray => {
+                const actionsSuccessful = Promise.all(elementsArray.map(elements => {
+                    if (array[i].sendKeys) {
+                        element.sendKeys(array[i].sendKeys);
+                    }
+
+                    actionsSuccessful
+                        .then(() => mainResolve())
+                        .catch((err) => mainResolve(err))
+                }));
+            })
+            .catch(err => mainReject(err))
+    });
 }
 
 function performWhen(steps) {
