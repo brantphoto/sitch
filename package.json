@@ -10,6 +10,10 @@
   "license": "ISC",
   "dependencies": {
     "colors": "^1.1.2",
+    "dotenv": "^4.0.0",
     "selenium-webdriver": "^3.4.0"
+  },
+  "devDependencies": {
+    "mongodb": "^2.2.26"
   }
 }

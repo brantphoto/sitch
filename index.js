@@ -1,3 +1,5 @@
+'use strict';
+
 var webdriver = require('selenium-webdriver');
 var By = webdriver.By;
 var until = webdriver.until;
@@ -7,81 +9,153 @@ var driver = new webdriver.Builder()
     .forBrowser('chrome')
     .build();
 
-exports.run = function(path) {
+var HOST_GLOBAL = '';
+
+function sitch(path, databaseConfig) {
     var tree;
     var results;
+    HOST_GLOBAL = databaseConfig.host;
+
     try {
         tree = JSON.parse(fs.readFileSync(path))
-        console.log(tree);
     }
     catch(err) {
         console.error(err);
     }
 
-    for (var i = 0; i < tree.main.length; i++) {
-        let formattedTests = formatTests(tree.data[tree.main[i]]);
-        setupTest(formattedTests[0])
-        performGiven(formattedTests[1])
-        performWhen(formattedTests[2])
-        performThen(formattedTests[3])
-    }
+    setupDatabase(databaseConfig, function(dbClient, cleanDatabaseMethod) {
+        let db = dbClient;
+        cleanDatabaseMethod(db, () => {
+            for (let i = 0; i < tree.main.length; i++) {
+                let formattedTests = formatTests(tree.data[tree.main[i]]);
+                setupTest(formattedTests, databaseConfig.actions, dbClient)
+                    .then(performGiven)
+                    .then(performWhen)
+                    .then(performThen)
+                    .then(() => cleanDatabaseMethod(db));
+            }
+        });
+    });
+};
+
+function setupDatabase(databaseConfig, cb) {
+    databaseConfig.start(function(databaseClient) {
+        cb(databaseClient, databaseConfig.clean)
+    });
 }
 
-function setupTest(array) {
-    for (var i = 0; i < array.length; i++) {
-        if (typeof array[i].setup == 'string') {
-            driver.get(array[i].setup);
-            continue;
+function setupTest(testMasterArray, actionsMethod, dbClient) {
+
+    const array = testMasterArray[0];
+    return new Promise((resolve, reject) => {
+        try {
+            for (let i = 0; i < array.length; i++) {
+                if (typeof array[i].setup == 'string') {
+                    driver.get(HOST_GLOBAL + array[i].setup);
+                    continue;
+                }
+                else if (array[i].setup.type) {
+                    actionsMethod(array[i].setup, dbClient, function() {
+                        console.log('ok!');
+                    });
+                    continue;
+                }
+                throw 'no url to go to';
+            }
+            resolve(testMasterArray)
         }
-        throw 'no url to go to';
-    }
+        catch (err) {
+            reject(err)
+        }
+    });
 }
 
 function performGiven(array) {
-    for (var i = 0; i < array.length; i++) {
-        if (array[i].find) {
-            console.log(colors.green('given ' + array[i].given));
-            let findKey = Object.keys(array[i].find)[0]
-            let element = driver.findElement(By[findKey](array[i].find[findKey]));
-            if (array[i].sendKeys) {
-                element.sendKeys(array[i].sendKeys);
-                continue;
-            }
-        }
-    }
-}
-
-function performWhen(steps) {
-    for (var i = 0; i < steps.length; i++) {
-        if (steps[i].find) {
-            console.log(colors.green('when ' + steps[i].when));
-            let findKey = Object.keys(steps[i].find)[0]
-            let element = driver.findElement(By[findKey](steps[i].find[findKey]));
-            if (steps[i].sendKeys) {
-                element.sendKeys(steps[i].sendKeys);
-                continue;
-            }
-            if (steps[i].event) {
-                element[steps[i].event]();
-                continue;
-            }
-            throw 'need to make sure all when objects have a find method'
-        }
-    }
-}
-
-function performThen(steps) {
-    for (let i = 0; i < steps.length; i++) {
-        console.log(colors.green('then ' + steps[i].then));
-        if (steps[i].urlIs) {
-            let url = steps[i].urlIs;
-            driver.wait(until.urlIs(steps[i].urlIs, 10000))
-            driver.getCurrentUrl()
-            .then(currentUrl => {
-                if (currentUrl === url) {
-                    console.log(colors.green('PASS'));
-                }
+    const givenArray = array[1];
+    return new Promise((mainResolve, mainReject) => {
+        const domElements = Promise.all(givenArray.map((given) => {
+            return new Promise((resolve, reject) => {
+                let findKey = Object.keys(given.find)[0];
+                driver.findElement(By[findKey](given.find[findKey]))
+                    .then(element => resolve(element))
+                    .catch(err => reject(err));
             });
+        }));
+
+        domElements
+            .then(elementsArray => {
+                const actionsSuccessful = Promise.all(elementsArray.map((element, index) => {
+                    return new Promise((resolve, reject) => {
+                        if (givenArray[index].sendKeys) {
+                            element.sendKeys(givenArray[index].sendKeys)
+                                .then(() =>  {
+                                    console.log(colors.green('given ' + givenArray[index].given));
+                                    resolve()
+                                })
+                                .catch(() => reject())
+                            return;
+                        }
+                        reject();
+                    });
+
+                }));
+
+                actionsSuccessful
+                    .then(() => mainResolve(array))
+                    .catch((err) => mainResolve(err))
+            })
+            .catch(err => mainReject(err))
+    });
+}
+
+function performWhen(testMasterArray) {
+    return new Promise((resolve, reject) => {
+        const whenArray = testMasterArray[2]
+        if (whenArray[0].find) {
+            let findKey = Object.keys(whenArray[0].find)[0]
+            let element = driver.findElement(By[findKey](whenArray[0].find[findKey]));
+            if (whenArray[0].sendKeys) {
+                element.sendKeys(whenArray[0].sendKeys)
+                    .then(() => {
+                        console.log(colors.green('when ' + whenArray[0].when));
+                        resolve(testMasterArray)
+                    });
+                return;
+            }
+            if (whenArray[0].event) {
+                element[whenArray[0].event]()
+                    .then(() => {
+                        console.log(colors.green('when ' + whenArray[0].when));
+                        resolve(testMasterArray)
+                    });
+                return;
+            }
+            reject('need to make sure all when objects have a find method');
+        }
+        reject();
+
+
+    });
+}
+
+function performThen(testMasterArray) {
+    const thenArray = testMasterArray[3];
+    for (let i = 0; i < thenArray.length; i++) {
+        console.log(colors.green('then ' + thenArray[i].then));
+        if (thenArray[i].urlIs) {
+            let url = HOST_GLOBAL + thenArray[i].urlIs;
+            driver.wait(until.urlIs(url), 10000);
+            driver.getCurrentUrl()
+                .then(currentUrl => {
+                    console.log(currentUrl);
+                    console.log(url);
+                    if (currentUrl === url) {
+                        console.log(colors.green('PASS'));
+                    }
+                })
+                .catch(() => {
+                    colors.red('then ' + thenArray[i].then)
+                });
         }
     }
 }
@@ -103,7 +177,6 @@ function formatTests(testArray) {
                 }
                 throw 'need to order better';
             case 1:
-                console.log('step 1', testArray[i]);
                 if (testArray[i].given) {
                     finalArray[step].push(testArray[i]);
                     continue;
@@ -126,10 +199,12 @@ function formatTests(testArray) {
                 throw 'needs to be a when or then next'
             case 3:
                 if (testArray[i].then) {
-                    throw 'cant have multile thens'
+                    throw 'cant have multiple thens'
                 }
                 continue;
         }
     }
     return finalArray;
 }
+
+module.exports = sitch;
