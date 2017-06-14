@@ -6,9 +6,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "flow-remove-types src/ -d lib/",
-    "flow": "flow status",
+    "flow": "flow",
     "prepublish": "npm run build",
-    "start": "npm run build; npm run flow"
+    "start": "npm run build; npm run flow",
+    "demo": "npm start; node lib/demo",
+    "demo:serverless": "npm start; node lib/demoNoServerConfig"
   },
   "author": "Brant Barger",
   "license": "ISC",

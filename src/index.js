@@ -12,36 +12,20 @@ var driver = new webdriver.Builder()
 
 var HOST_GLOBAL = '';
 
-type Action = {
-    type: string,
-    data: any
-}
-
-type DatabaseConfig = {
-  host: string,
-  actions: ?(action: Action, dbClient: any, cb: () => void)  => void,
-  start: ?(cb: (db: any) => void) => void,
-  clean: ?(dbClient: any, cb: (tree: any, databaseConfig: DatabaseConfig, dbClient: ?any) => void) => void
-};
-
-function sitch(path: string, databaseConfig: DatabaseConfig) {
-    var tree;
-    var results;
+function sitch(tree: Tree, databaseConfig: DatabaseConfig) {
     HOST_GLOBAL = databaseConfig.host;
-
-    fs.readFile(path, (err, file) => {
-        if (err) throw err;
-
-        tree = JSON.parse(file.toString('ascii'));
-        setupDatabase(tree, databaseConfig, setupDBCallback)
-    });
+    setupDatabase(tree, databaseConfig, setupDBCallback)
 
     function setupDBCallback(tree, dbClient, cleanDatabaseMethod) {
         if (dbClient && cleanDatabaseMethod) {
-            cleanDatabaseMethod(dbClient, runTests.bind(null, tree, databaseConfig, dbClient));
+            cleanDatabaseMethod(dbClient, () => {
+                runTests(tree, databaseConfig, dbClient);
+            });
             return;
         }
-        runTests(tree, databaseConfig);
+        else {
+            runTests(tree, databaseConfig, dbClient);
+        }
     }
 };
 
@@ -52,43 +36,48 @@ function setupDatabase(tree, databaseConfig, cb) {
         });
         return;
     }
-    cb(tree);
+    cb(tree, null, null);
 }
 
 function runTests(tree, databaseConfig, dbClient) {
-    for (let i = 0; i < tree.main.length; i++) {
-        let formattedTests = formatTests(tree.data[tree.main[i]]);
-        setupTest(formattedTests, databaseConfig.actions, dbClient)
+    for (let i = 0; i < tree.length; i++) {
+        setupTest(tree[i], databaseConfig.actions, dbClient)
             .then(performGiven)
             .then(performWhen)
             .then(performThen)
-            .then(() => finishTesting(databaseConfig, dbClient));
+            .then(() => {
+                if (databaseConfig.clean && dbClient) {
+                    finalClean(databaseConfig, dbClient)
+                }
+            });
     }
 }
 
-function finishTesting(dbConfig, dbClient) {
-    if (!dbConfig.clean) return;
-    dbConfig.clean(dbClient, () => {});
+function finalClean(databaseConfig, dbClient) {
+    if (databaseConfig != null && databaseConfig.clean != null) {
+        databaseConfig.clean(dbClient, () => {
+        });
+    }
 }
 
-function setupTest(testMasterArray, actionsMethod, dbClient) {
-    const array = testMasterArray[0];
+function setupTest(testObject: Test, actionsMethod, dbClient): Promise<any> {
+    const array = Array.isArray(testObject.setup) ? testObject.setup : [];
     return new Promise((resolve, reject) => {
         try {
             for (let i = 0; i < array.length; i++) {
-                if (typeof array[i].setup == 'string') {
-                    driver.get(HOST_GLOBAL + array[i].setup);
+                if (typeof array[i] == 'string') {
+                    driver.get(HOST_GLOBAL + array[i]);
                     continue;
                 }
-                else if (array[i].setup.type) {
+                else if (array[i] && array[i].type && array[i].data) {
                     if (!actionsMethod) throw 'No action handler defined';
-                    actionsMethod(array[i].setup, dbClient, function() {
+                    actionsMethod(array[i], dbClient, function() {
                         console.log('ok!');
                     });
                     continue;
                 }
             }
-            resolve(testMasterArray)
+            resolve(testObject)
         }
         catch (err) {
             reject(err)
@@ -96,8 +85,8 @@ function setupTest(testMasterArray, actionsMethod, dbClient) {
     });
 }
 
-function performGiven(array) {
-    const givenArray = array[1];
+function performGiven(testObject) : Promise<any> {
+    let givenArray = Array.isArray(testObject.given) ? testObject.given : [];
     return new Promise((mainResolve, mainReject) => {
         const domElements = Promise.all(givenArray.map((given) => {
             return new Promise((resolve, reject) => {
@@ -112,8 +101,8 @@ function performGiven(array) {
             .then(elementsArray => {
                 const actionsSuccessful = Promise.all(elementsArray.map((element, index) => {
                     return new Promise((resolve, reject) => {
-                        if (givenArray[index].sendKeys) {
-                            element.sendKeys(givenArray[index].sendKeys)
+                        if (givenArray[index].event === 'sendKeys') {
+                            element.sendKeys(givenArray[index].value)
                                 .then(() =>  {
                                     console.log(colors.green('given ' + givenArray[index].given));
                                     resolve()
@@ -127,32 +116,38 @@ function performGiven(array) {
                 }));
 
                 actionsSuccessful
-                    .then(() => mainResolve(array))
+                    .then(() => mainResolve(testObject))
                     .catch((err) => mainResolve(err))
             })
             .catch(err => mainReject(err))
     });
 }
 
-function performWhen(testMasterArray) {
+function performWhen(testObject: Test) : Promise<any> {
     return new Promise((resolve, reject) => {
-        const whenArray = testMasterArray[2]
-        if (whenArray[0].find) {
-            let findKey = Object.keys(whenArray[0].find)[0]
-            let element = driver.findElement(By[findKey](whenArray[0].find[findKey]));
-            if (whenArray[0].sendKeys) {
-                element.sendKeys(whenArray[0].sendKeys)
+        if (testObject.when.find) {
+            let element;
+            if (typeof testObject.when.find.id === 'string') {
+                element = driver.findElement(By.id(testObject.when.find.id))
+            }
+            else if (typeof testObject.when.find.name === 'string') {
+                element = driver.findElement(By.name(testObject.when.find.name));
+            }
+            if (!element) return reject();
+
+            if (testObject.when.event === 'sendKeys') {
+                element.sendKeys(testObject.when.value)
                     .then(() => {
-                        console.log(colors.green('when ' + whenArray[0].when));
-                        resolve(testMasterArray)
+                        console.log(colors.green('when ' + testObject.when.when));
+                        resolve(testObject)
                     });
                 return;
             }
-            if (whenArray[0].event) {
-                element[whenArray[0].event]()
+            if (testObject.when.event === 'click') {
+                element.click()
                     .then(() => {
-                        console.log(colors.green('when ' + whenArray[0].when));
-                        resolve(testMasterArray)
+                        console.log(colors.green('when ' + testObject.when.when));
+                        resolve(testObject)
                     });
                 return;
             }
@@ -164,8 +159,8 @@ function performWhen(testMasterArray) {
     });
 }
 
-function performThen(testMasterArray) {
-    const thenArray = testMasterArray[3];
+function performThen(testObject) {
+    const thenArray = Array.isArray(testObject.then) ? testObject.then : [testObject.then];
     for (let i = 0; i < thenArray.length; i++) {
         console.log(colors.green('then ' + thenArray[i].then));
         if (thenArray[i].urlIs) {
