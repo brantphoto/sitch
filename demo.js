@@ -1,5 +1,5 @@
 require('dotenv').config();
-var sitch = require('./index');
+var sitch = require('./lib/index');
 var MongoClient = require('mongodb').MongoClient;
 var Server = require('mongodb').Server;
 
