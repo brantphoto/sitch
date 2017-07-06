@@ -3,19 +3,26 @@
     "data": {
         "12345678": [
             {
-                "given": "on the landing page",
-                "url": "localhost:3000/login",
-                "wait": 3000
+                "setup": {
+                    "type": "ADD_USER",
+                    "data": {
+                        "username": "brant",
+                        "password": "barger"
+                    }
+                }
+            },
+            {
+                "setup": "/login"
             },
             {
                 "given": "Username is filled in with valid username",
                 "find": {
-                    "name": "username"
+                    "name": "ragova"
                 },
                 "sendKeys": "services"
             },
             {
-                "given": "the password is filled in`",
+                "given": "the password is filled in",
                 "find": {
                     "name": "password"
                 },
@@ -30,7 +37,7 @@
             },
             {
                 "then": "you should be taken to the dashboard",
-                "urlIs": "http://localhost:3000/dashboard"
+                "urlIs": "/dashboard"
             }
         ]
     }

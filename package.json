@@ -1,15 +1,31 @@
 {
-  "name": "sorcerer-testing",
-  "version": "1.0.0",
+  "name": "sitch",
+  "version": "0.0.1",
   "description": "An e2e testing framework",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "flow-remove-types src/ -d lib/",
+    "flow": "flow",
+    "prepublish": "npm run build",
+    "start": "npm run build; npm run flow",
+    "demo": "npm start; node lib/demo",
+    "demo:serverless": "npm start; node lib/demoNoServerConfig",
+    "help": "flow --help"
   },
   "author": "Brant Barger",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "colors": "^1.1.2",
-    "selenium-webdriver": "^3.4.0"
+    "commander": "^2.9.0",
+    "flow-remove-types": "^1.2.1",
+    "minimist": "^1.2.0",
+    "node-cmd": "^3.0.0",
+    "selenium-webdriver": "3.4.0"
+  },
+  "devDependencies": {
+    "dotenv": "^4.0.0",
+    "flow-bin": "^0.48.0",
+    "mongodb": "^2.2.26"
   }
 }
