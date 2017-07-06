@@ -5,6 +5,7 @@ var webdriver = require('selenium-webdriver');
 var By = webdriver.By;
 var until = webdriver.until;
 var colors = require('colors');
+var contra = require('contra');
 var fs = require('fs');
 var driver = new webdriver.Builder()
     .forBrowser('chrome')
@@ -12,41 +13,41 @@ var driver = new webdriver.Builder()
 
 var HOST_GLOBAL = '';
 
-function sitch(tree: Tree, databaseConfig: DatabaseConfig) {
-    HOST_GLOBAL = databaseConfig.host;
-    setupDatabase(tree, databaseConfig, setupDBCallback)
+function sitch(tree: Tree, host: string, databaseConfig: ?DatabaseConfig) {
+    HOST_GLOBAL = host;
+    if (databaseConfig != null) {
+        setupDatabase(tree, databaseConfig, setupDBCallback)
+        return;
+    }
+    runTests(tree);
 
-    function setupDBCallback(tree, dbClient, cleanDatabaseMethod) {
-        if (dbClient && cleanDatabaseMethod) {
-            cleanDatabaseMethod(dbClient, () => {
+    function setupDBCallback(tree: Tree, dbClient, databaseConfig: DatabaseConfig) {
+            databaseConfig.clean(dbClient, () => {
                 runTests(tree, databaseConfig, dbClient);
             });
             return;
-        }
-        else {
-            runTests(tree, databaseConfig, dbClient);
-        }
     }
 };
 
 function setupDatabase(tree, databaseConfig, cb) {
-    if (databaseConfig.start) {
-        databaseConfig.start(databaseClient => {
-            cb(tree, databaseClient, databaseConfig.clean)
-        });
-        return;
-    }
-    cb(tree, null, null);
+    databaseConfig.start(databaseClient => {
+        cb(tree, databaseClient, databaseConfig)
+    });
 }
 
 function runTests(tree, databaseConfig, dbClient) {
     for (let i = 0; i < tree.length; i++) {
-        setupTest(tree[i], databaseConfig.actions, dbClient)
+        let setupMethod;
+        databaseConfig != null ?
+            setupMethod = setupTest.bind(null, tree[i], databaseConfig.actions, dbClient) :
+            setupMethod = setupTestServerless.bind(null, tree[i]);
+
+        setupMethod()
             .then(performGiven)
             .then(performWhen)
             .then(performThen)
             .then(() => {
-                if (databaseConfig.clean && dbClient) {
+                if (databaseConfig && dbClient) {
                     finalClean(databaseConfig, dbClient)
                 }
             });
@@ -85,13 +86,37 @@ function setupTest(testObject: Test, actionsMethod, dbClient): Promise<any> {
     });
 }
 
-function performGiven(testObject) : Promise<any> {
-    let givenArray = Array.isArray(testObject.given) ? testObject.given : [];
+function setupTestServerless(testObject: Test) {
+    const array = Array.isArray(testObject.setup) ? testObject.setup : [];
+
+    return new Promise((resolve, reject) => {
+        let arrayOfAsyncFunctions = array.map(setup => {
+            return (next) => {
+                if (typeof setup == 'string') {
+                    return driver.get(HOST_GLOBAL + setup)
+                        .then(() => next());
+                }
+                return next();
+            }
+        });
+
+        contra.waterfall(arrayOfAsyncFunctions, (err) => {
+            if (err) return reject(err);
+            resolve(testObject);
+        });
+    });
+}
+
+function performGiven(testObject: Test) : Promise<any> {
+    let givenArray;
+    Array.isArray(testObject.given) ? givenArray = [...testObject.given] : [];
+
     return new Promise((mainResolve, mainReject) => {
-        const domElements = Promise.all(givenArray.map((given) => {
+        const domElements = Promise.all(givenArray.map((given: Given) => {
             return new Promise((resolve, reject) => {
-                let findKey = Object.keys(given.find)[0];
-                driver.findElement(By[findKey](given.find[findKey]))
+                let findByMethod = pickFindByMethod(given, driver)
+
+                findByMethod()
                     .then(element => resolve(element))
                     .catch(err => reject(err));
             });
@@ -121,6 +146,16 @@ function performGiven(testObject) : Promise<any> {
             })
             .catch(err => mainReject(err))
     });
+}
+
+function pickFindByMethod(given: Given, driver) {
+    if (given.find.id) {
+        return driver.findElement.bind(driver, By.id(given.find.id))
+    }
+    else if (given.find.name) {
+        return driver.findElement.bind(driver, By.name(given.find.name))
+    }
+    return driver.findElement.bind(driver, By.name(''));
 }
 
 function performWhen(testObject: Test) : Promise<any> {

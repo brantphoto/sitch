@@ -8,9 +8,4 @@ if (typeof process.env.HOST == 'string') {
 };
 const tree = require('./test1');
 
-sitch(tree, {
-    host: host,
-    actions: null,
-    start: null,
-    clean: null,
-});
+sitch(tree, host);

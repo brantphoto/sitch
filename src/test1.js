@@ -1,4 +1,4 @@
-// @flow
+//
 'use strict';
 
 module.exports = [
@@ -20,7 +20,7 @@ module.exports = [
                     name: "username"
                 },
                 event: "sendKeys",
-                value: 'services'
+                value: ''
             },
             {
                 given: "the password is filled in",
@@ -28,7 +28,7 @@ module.exports = [
                     name: "password"
                 },
                 event: "sendKeys",
-                value: '12345678'
+                value: ''
             }
         ],
         when: {

@@ -4,10 +4,9 @@ declare type Action = {
 }
 
 declare type DatabaseConfig = {
-  host: string,
-  actions: ?(action: Action, dbClient: any, cb: () => void)  => void,
-  start: ?(cb: (db: any) => void) => void,
-  clean: ?(dbClient: any, cb: () => void) => void;
+  actions: (action: Action, dbClient: any, cb: () => void)  => void,
+  start: (cb: (db: any) => void) => void,
+  clean: (dbClient: any, cb: () => void) => void;
 };
 
 declare type FindByName = {
