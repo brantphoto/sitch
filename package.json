@@ -1,6 +1,6 @@
 {
   "name": "sitch",
-  "version": "0.0.1",
+  "version": "0.0.1-beta.1",
   "description": "An e2e testing framework",
   "main": "index.js",
   "scripts": {
