@@ -17,7 +17,7 @@
             {
                 "given": "Username is filled in with valid username",
                 "find": {
-                    "name": "username"
+                    "name": "ragova"
                 },
                 "sendKeys": "services"
             },

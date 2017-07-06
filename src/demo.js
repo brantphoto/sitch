@@ -1,11 +1,16 @@
+// @flow
+'use strict'
 require('dotenv').config();
-var sitch = require('./index');
-var MongoClient = require('mongodb').MongoClient;
-var Server = require('mongodb').Server;
+const sitch = require('./index');
+const MongoClient = require('mongodb').MongoClient;
+const Server = require('mongodb').Server;
+let host = '';
+if (typeof process.env.HOST == 'string') {
+    host = host + process.env.HOST;
+};
+const tree = require('./test1');
 
-
-sitch('./test.json', {
-    host: process.env.HOST,
+sitch(tree, host, {
     actions: actions,
     start: start,
     clean: clean,
@@ -18,7 +23,7 @@ function actions(action, dbClient, cb) {
                 cb();
             });
     }
-    return null;
+    cb();
 }
 
 function start(cb) {
