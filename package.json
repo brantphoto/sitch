@@ -2,7 +2,7 @@
   "name": "sitch",
   "version": "0.0.1-beta.1",
   "description": "An e2e testing framework",
-  "main": "index.js",
+  "main": "lib/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "flow-remove-types src/ -d lib/",
